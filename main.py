@@ -14,6 +14,7 @@ import textwrap
 
 app = Flask(__name__)
 
+# New stuffs blablabla.....
 
 class Transaction:
     def __init__(self, sender, recipient, value):
@@ -355,7 +356,3 @@ if __name__ == "__main__":
     blockchain = Blockchain()
     port = 5000
     app.run(host='127.0.0.1', port=port)
-
-
-
-
