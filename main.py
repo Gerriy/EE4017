@@ -40,28 +40,6 @@ class Transaction:
         return json.dumps(self.__dict__, sort_keys=False)
 
 
-class Wallet:
-    def __init__(self):
-        random = Crypto.Random.new().read
-        self.private_key = RSA.generate(1024, random)
-        self.public_key = self.private_key.publickey()
-
-    def sign_transaction(self, transaction: Transaction):
-        signer = PKCS1_v1_5.new(self.private_key)
-        h = SHA256.new(str(transaction.to_dict()).encode('utf8'))
-        return binascii.hexlify(signer.sign(h)).decode('ascii')
-
-    @property
-    def identity(self):
-        pubkey = binascii.hexlify(self.public_key.exportKey(format='DER'))
-        return pubkey.decode('ascii')
-
-    @property
-    def private(self):
-        privatekey = binascii.hexlify(self.private_key.exportKey(format='DER'))
-        return privatekey.decode('ascii')
-
-
 class Block:
     def __init__(self, index, transactions, timestamp, previous_hash):
         self.index = index
@@ -229,6 +207,43 @@ class Blockchain:
         return json.loads(self.chain[-1])
 
 
+class Wallet:
+    def __init__(self):
+        random = Crypto.Random.new().read
+        self.private_key = RSA.generate(1024, random)
+        self.public_key = self.private_key.publickey()
+
+    def sign_transaction(self, transaction: Transaction):
+        signer = PKCS1_v1_5.new(self.private_key)
+        h = SHA256.new(str(transaction.to_dict()).encode('utf8'))
+        return binascii.hexlify(signer.sign(h)).decode('ascii')
+
+    def get_balance(self, blockchain: Blockchain):
+        blocks = blockchain.chain
+        balance = 0
+        for block in blocks:
+            transactions = json.loads(block)['transactions']
+            for transaction in transactions:
+                transaction = json.loads(transaction)
+                if transaction['recipient'] == self.identity:
+                    balance += float(transaction['value'])
+        return balance
+
+    @property
+    def identity(self):
+        pubkey = binascii.hexlify(self.public_key.exportKey(format='DER'))
+        return pubkey.decode('ascii')
+
+    @property
+    def private(self):
+        privatekey = binascii.hexlify(self.private_key.exportKey(format='DER'))
+        return privatekey.decode('ascii')
+
+
+@app.route('/', methods=["GET"])
+def landing_page():
+    return "Server started!"
+
 @app.route('/new_transaction', methods=["POST"])
 def new_transaction():
     value = request.form
@@ -256,6 +271,13 @@ def get_transactions():
     return jsonify(response), 200
 
 
+@app.route('/get_balance', methods=['GET'])
+def get_balance():
+    # Get the balance of the user's wallet
+    response = {'balance': myWallet.get_balance(blockchain)}
+    return jsonify(response), 200
+
+
 @app.route('/chain', methods=['GET'])
 def part_chain():
     response = {
@@ -271,6 +293,8 @@ def full_chain():
         'chain': json.dumps(blockchain.chain),
         'length': len(blockchain.chain),
     }
+    for block in blockchain.chain:
+        print(block)
     return jsonify(response), 200
 
 
@@ -355,7 +379,3 @@ if __name__ == "__main__":
     blockchain = Blockchain()
     port = 5000
     app.run(host='127.0.0.1', port=port)
-
-
-
-
