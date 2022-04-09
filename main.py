@@ -159,7 +159,7 @@ class Blockchain:
                             and t['recipient'] != 'Interest':
                         recipient.append(t['recipient'])
                     if t['sender'] not in recipient and t['sender'] != 'Block_Reward' \
-                            and t['recipient'] != 'Interest':
+                            and t['sender'] != 'Interest':
                         recipient.append(t['sender'])
 
             recipient_dict = dict.fromkeys(recipient, 0)
@@ -170,7 +170,7 @@ class Blockchain:
                 transactions = block_dict['transactions']
                 for t in transactions:
                     t = json.loads(t)
-                    if t['sender'] != 'Block_Reward' and t['recipient'] != 'Interest':
+                    if t['sender'] != 'Block_Reward' and t['sender'] != 'Interest':
                         recipient_dict[t['sender']] = float(recipient_dict[t['sender']]) - float(t['value'])
                     if t['recipient'] != 'Block_Reward' and t['recipient'] != 'Interest':
                         recipient_dict[t['recipient']] = float(recipient_dict[t['recipient']]) + float(t['value'])
