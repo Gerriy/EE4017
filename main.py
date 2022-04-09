@@ -12,17 +12,21 @@ from urllib.parse import urlparse
 import datetime;
 import textwrap
 
+MINING_REWARD = 5.0
+MIN_TRANSACTION_FEE_RATE = 0.1
+
 app = Flask(__name__)
 
 
 class Transaction:
-    def __init__(self, sender, recipient, value):
+    def __init__(self, sender, recipient, value, transaction_fee):
         self.sender = sender
         self.recipient = recipient
         self.value = value
+        self.transaction_fee = transaction_fee
 
     def to_dict(self):
-        return ({'sender': self.sender, 'recipient': self.recipient, 'value': self.value})
+        return ({'sender': self.sender, 'recipient': self.recipient, 'value': self.value, 'transaction_fee': self.transaction_fee})
 
     def add_signature(self, signature_):
         self.signature = signature_
@@ -113,7 +117,11 @@ class Blockchain:
         return computed_hash
 
     def mine(self, myWallet):
-        block_reward = Transaction("Block_Reward", myWallet.identity, "5.0").to_json()
+        transaction_fee = 0
+        for transaction in self.unconfirmed_transactions:
+            transaction_fee += float(json.loads(transaction)['transaction_fee'])
+
+        block_reward = Transaction("Block_Reward", myWallet.identity, MINING_REWARD + transaction_fee, 0).to_json()
         self.unconfirmed_transactions.insert(0, block_reward)
         if not self.unconfirmed_transactions:
             return False
@@ -192,7 +200,8 @@ class Blockchain:
                         continue
                     current_transaction = Transaction(transaction['sender'],
                                                       transaction['recipient'],
-                                                      transaction['value'])
+                                                      transaction['value'],
+                                                      transaction['transaction_fee'])
                     current_transaction.signature = transaction['signature']
 
                     if not current_transaction.verify_transaction_signature():
@@ -227,6 +236,9 @@ class Wallet:
                 transaction = json.loads(transaction)
                 if transaction['recipient'] == self.identity:
                     balance += float(transaction['value'])
+                if transaction['sender'] == self.identity:
+                    balance -= float(transaction['value'])
+                    balance -= float(transaction['transaction_fee'])
         return balance
 
     @property
@@ -251,7 +263,19 @@ def new_transaction():
     if not all(k in value for k in required):
         return 'Missing value', 400
 
-    transaction = Transaction(myWallet.identity, value['recipient_address'], value['amount'])
+    recipient_address = value['recipient_address'].strip()
+    amount = float(value['amount'])
+    min_transaction_fee = amount * MIN_TRANSACTION_FEE_RATE
+
+    if 'transaction_fee' in value and float(value.get('transaction_fee')) >= min_transaction_fee:
+        transaction_fee = value['transaction_fee']
+    else:
+        # If transaction_fee is not provided or lower than min_transaction_fee, deduct the minimum transaction fee from the transaction amount
+        transaction_fee = min_transaction_fee
+        amount -= min_transaction_fee
+
+    # Create a new Transaction
+    transaction = Transaction(myWallet.identity, recipient_address, amount, transaction_fee)
     transaction.add_signature(myWallet.sign_transaction(transaction))
     transaction_result = blockchain.add_new_transaction(transaction)
 
