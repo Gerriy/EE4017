@@ -87,6 +87,11 @@ class Block:
 
 
 class Blockchain:
+    # ======================================== Interest variables ========================================
+    interest_timestamp = None
+    interest_interval = datetime.timedelta(days=0, hours=0, minutes=0)
+    interest_rate = 0.05
+    # ======================================== Interest variables ========================================
     difficulty = 2
     nodes = set()
 
@@ -99,6 +104,11 @@ class Blockchain:
         genesis_block = Block(0, [], datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S"), "0")
 
         genesis_block.hash = genesis_block.compute_hash()
+
+        # ======================================= Initialize Interest variables =======================================
+        self.interest_timestamp = datetime.datetime.now()
+        # ======================================= Initialize Interest variables =======================================
+
         self.chain.append(genesis_block.to_json())
 
     def add_new_transaction(self, transaction: Transaction):
@@ -135,6 +145,45 @@ class Blockchain:
         return computed_hash
 
     def mine(self, myWallet):
+
+        # ======================================== Code to give interest ========================================
+        time_diff = datetime.datetime.now() - self.interest_timestamp
+        if time_diff > self.interest_interval:
+            recipient = []
+            for block in self.chain:
+                block_dict = json.loads(block)
+                transactions = block_dict['transactions']
+                for t in transactions:
+                    t = json.loads(t)
+                    if t['recipient'] not in recipient and t['recipient'] != 'Block_Reward' \
+                            and t['recipient'] != 'Interest':
+                        recipient.append(t['recipient'])
+                    if t['sender'] not in recipient and t['sender'] != 'Block_Reward' \
+                            and t['recipient'] != 'Interest':
+                        recipient.append(t['sender'])
+
+            recipient_dict = dict.fromkeys(recipient, 0)
+            print(recipient_dict)
+
+            for block in self.chain:
+                block_dict = json.loads(block)
+                transactions = block_dict['transactions']
+                for t in transactions:
+                    t = json.loads(t)
+                    if t['sender'] != 'Block_Reward' and t['recipient'] != 'Interest':
+                        recipient_dict[t['sender']] = float(recipient_dict[t['sender']]) - float(t['value'])
+                    if t['recipient'] != 'Block_Reward' and t['recipient'] != 'Interest':
+                        recipient_dict[t['recipient']] = float(recipient_dict[t['recipient']]) + float(t['value'])
+
+            for r in recipient_dict:
+                print(r, recipient_dict[r])
+                interest = Transaction("Interest", r, float(recipient_dict[r])*self.interest_rate).to_json()
+                self.unconfirmed_transactions.insert(0, interest)
+
+        else:
+            print("Not time to give interest yet")
+            # ======================================== Code to give interest ========================================
+
         block_reward = Transaction("Block_Reward", myWallet.identity, "5.0").to_json()
         self.unconfirmed_transactions.insert(0, block_reward)
         if not self.unconfirmed_transactions:
@@ -212,6 +261,12 @@ class Blockchain:
 
                     if transaction['sender'] == 'Block_Reward':
                         continue
+
+                    # Ignore Interest Signature
+                    if transaction['sender'] == 'Interest':
+                        continue
+                    # Ignore Interest Signature
+
                     current_transaction = Transaction(transaction['sender'],
                                                       transaction['recipient'],
                                                       transaction['value'])
@@ -224,6 +279,45 @@ class Blockchain:
             current_index += 1
         return True
 
+    # ======================================== Code to check balance ========================================
+    def verify_amount(self, address, amount):
+        # If $0 is to be sent, always valid
+        if float(amount) == 0:
+            return True
+
+        # Get the latest chain and it's length
+        fullchain = self.chain
+        balance = 0
+
+        # Start checking from genesis block
+        for block in fullchain:
+            # Convert the block from str to dict
+            block_dict = json.loads(block)
+
+            # Obtain a list of all transactions from this block
+            transactions = block_dict['transactions']
+
+            # Iterate all transactions in current block
+            for t in transactions:
+                t = json.loads(t)
+
+                # If money is sent, deduct balance
+                # If money is received, increase balance
+                if t['sender'] == address:
+                    balance = balance - float(t['value'])
+                    print("Balance reduced ", float(t['value']))
+                elif t['recipient'] == address:
+                    balance = balance + float(t['value'])
+                    print("Balance increased ", float(t['value']))
+
+                # If balance is larger than amount, there is enough money in the wallet
+                if balance >= float(amount):
+                    return True
+
+        # Not enough balance, transaction failed
+        return False
+    # ======================================== Code to check balance ========================================
+
     @property
     def last_block(self):
         return json.loads(self.chain[-1])
@@ -235,6 +329,10 @@ def new_transaction():
     required = ['recipient_address', 'amount']
     if not all(k in value for k in required):
         return 'Missing value', 400
+
+    if not blockchain.verify_amount(myWallet.identity, value['amount']):
+        response = {'message': 'Not Enough Balance'}
+        return jsonify(response), 406
 
     transaction = Transaction(myWallet.identity, value['recipient_address'], value['amount'])
     transaction.add_signature(myWallet.sign_transaction(transaction))
