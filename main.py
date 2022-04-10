@@ -89,7 +89,11 @@ class Block:
 class Blockchain:
     # ======================================== Interest variables ========================================
     interest_timestamp = None
+<<<<<<< Updated upstream
     interest_interval = datetime.timedelta(days=0, hours=0, minutes=0)
+=======
+    interest_interval = datetime.timedelta(days=0, hours=0, minutes=1)
+>>>>>>> Stashed changes
     interest_rate = 0.05
     # ======================================== Interest variables ========================================
     difficulty = 2
@@ -180,6 +184,11 @@ class Blockchain:
                 interest = Transaction("Interest", r, float(recipient_dict[r])*self.interest_rate).to_json()
                 self.unconfirmed_transactions.insert(0, interest)
 
+<<<<<<< Updated upstream
+=======
+            self.interest_timestamp += self.interest_interval
+
+>>>>>>> Stashed changes
         else:
             print("Not time to give interest yet")
             # ======================================== Code to give interest ========================================
